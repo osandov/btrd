@@ -1,3 +1,4 @@
+use std::ascii::escape_default;
 use std::convert::TryInto;
 use std::fmt;
 
@@ -12,7 +13,9 @@ pub enum Value {
     ///
     /// Any conversion errors (eg. during demotion, to unsigned) will trigger runtime errors
     Integer(i128),
-    String(String),
+    /// Strings are internally stored as an array of u8 to support lossless strings (in the event
+    /// that the "string" isn't utf-8)
+    String(Vec<u8>),
     Boolean(bool),
     Array(Array),
     Function(Function),
@@ -55,7 +58,14 @@ impl Value {
 
     pub fn as_string(&self) -> Result<String> {
         match self {
-            Value::String(s) => Ok(s.clone()),
+            Value::String(s) => {
+                let escaped_bytes = s
+                    .iter()
+                    .flat_map(|b| escape_default(*b))
+                    .collect::<Vec<u8>>();
+
+                Ok(String::from_utf8(escaped_bytes)?)
+            }
             v => bail!("Expected string, got '{}'", v.short_display()),
         }
     }
@@ -86,7 +96,7 @@ impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Value::Integer(i) => write!(f, "{}", i),
-            Value::String(s) => write!(f, "{}", s),
+            Value::String(_) => write!(f, "{}", self.as_string().unwrap()),
             Value::Boolean(b) => {
                 write!(f, "{}", if *b { "true" } else { "false" })
             }
@@ -320,11 +330,7 @@ impl Struct {
                         name: field
                             .name
                             .ok_or_else(|| anyhow!("TrailingString can't be anonymous"))?,
-                        value: Value::String(
-                            String::from_utf8_lossy(&bytes[offset..end_of_str])
-                                .escape_default()
-                                .to_string(),
-                        ),
+                        value: Value::String(bytes[offset..end_of_str].to_owned()),
                     });
 
                     offset += string_len;

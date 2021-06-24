@@ -64,7 +64,7 @@ impl<'a> Eval<'a> {
                 Constant::Integer(i) => Value::Integer(*i),
                 Constant::Boolean(b) => Value::Boolean(*b),
             },
-            PrimaryExpression::Str(s) => Value::String(s.clone()),
+            PrimaryExpression::Str(s) => Value::String(s.as_bytes().to_owned()),
             PrimaryExpression::Paren(expr) => self.eval_expr(expr)?,
         };
 
@@ -91,7 +91,9 @@ impl<'a> Eval<'a> {
                         Ok(Value::Array(arr))
                     }
                     (Value::String(l), Value::String(r)) => {
-                        Ok(Value::String(format!("{}{}", l, r)))
+                        let mut concat = l;
+                        concat.extend_from_slice(&r);
+                        Ok(Value::String(concat))
                     }
                     (l, r) => bail!("Cannot add types '{}' and '{}'", l.type_str(), r.type_str()),
                 }
@@ -409,7 +411,7 @@ impl<'a> Eval<'a> {
             f @ Function::TypeOf => {
                 ensure!(args.len() == 1, "'{}()' requires 1 argument", f);
                 let expr = self.eval_expr(&args[0])?;
-                Ok(Value::String(expr.type_str()))
+                Ok(Value::String(expr.type_str().as_bytes().to_owned()))
             }
             f @ Function::KeyOf => {
                 ensure!(args.len() == 1, "'{}()' requires 1 argument", f);
@@ -448,7 +450,7 @@ impl<'a> Eval<'a> {
                 ensure!(args.len() == 1, "{}() requires 1 argument", f);
                 let expr = self.eval_expr(&args[0])?;
 
-                Ok(Value::String(format!("{}", expr)))
+                Ok(Value::String(format!("{}", expr).as_bytes().to_owned()))
             }
         }
     }
@@ -1086,7 +1088,7 @@ fn test_array() {
                 vec: vec![
                     Value::Integer(3),
                     Value::Integer(5),
-                    Value::String("asdf".to_string()),
+                    Value::String("asdf".as_bytes().to_owned()),
                 ],
                 is_hist: false,
             }),
@@ -1159,7 +1161,7 @@ fn test_function_str() {
         (r#"print str("str");"#, "str\n".to_string()),
         (r#"print str(true);"#, "true\n".to_string()),
         (r#"print str(str);"#, "str()\n".to_string()),
-        (r#"print str(hist());"#, "[\n]\n".to_string()),
+        (r#"print str(hist());"#, "[\\n]\n".to_string()),
     ];
 
     use crate::lang::parse::parse;
